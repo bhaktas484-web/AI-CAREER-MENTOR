@@ -1,6 +1,5 @@
 import { v2 as cloudinary } from 'cloudinary'
 import multer from 'multer'
-import { Readable } from 'stream'
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -13,23 +12,20 @@ const cloudinaryStorage = {
   _handleFile(req, file, cb) {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder:        'ai-career-mentor/resumes',
-        resource_type: 'raw',
-        allowed_formats: ['pdf', 'doc', 'docx'],
-        use_filename: true,
+        folder:          'ai-career-mentor/resumes',
+        resource_type:   'raw',
+        access_mode:     'public',          // ← makes the file publicly downloadable
+        use_filename:    true,
         unique_filename: true,
       },
       (error, result) => {
         if (error) return cb(error)
         cb(null, {
-          path:     result.secure_url,   // accessible as req.file.path
-          filename: result.public_id,    // accessible as req.file.filename
+          path:     result.secure_url,   // req.file.path
+          filename: result.public_id,    // req.file.filename
         })
       }
     )
-    // Pipe the incoming file buffer into Cloudinary
-    const readable = new Readable()
-    readable.push(null)
     file.stream.pipe(uploadStream)
   },
 
@@ -40,18 +36,14 @@ const cloudinaryStorage = {
 
 export const uploadResume = multer({
   storage: cloudinaryStorage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = [
       'application/pdf',
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ]
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true)
-    } else {
-      cb(new Error('Only PDF and Word documents are allowed.'))
-    }
+    allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Only PDF and Word documents are allowed.'))
   },
 })
 
