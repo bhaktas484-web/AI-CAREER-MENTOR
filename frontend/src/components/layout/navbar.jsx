@@ -1,8 +1,22 @@
-import React, { useState } from 'react'
- 
+import React from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
+import { selectUser, logoutUser } from '../../store/userslice'
+
 export default function Navbar() {
-  const [notifs] = useState(3)
- 
+  const dispatch = useDispatch()
+  const navigate = useNavigate()
+  const user     = useSelector(selectUser)
+
+  const initials = user?.name
+    ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'U'
+
+  const handleLogout = () => {
+    dispatch(logoutUser())
+    navigate('/')
+  }
+
   return (
     <nav style={{
       position: 'fixed', top: 0, left: 'var(--sidebar-width)', right: 0,
@@ -10,66 +24,51 @@ export default function Navbar() {
       background: 'rgba(15,17,23,0.85)', backdropFilter: 'blur(16px)',
       borderBottom: '1px solid var(--border)',
       display: 'flex', alignItems: 'center',
-      padding: '0 32px', gap: 16,
-      justifyContent: 'space-between'
+      padding: '0 32px', justifyContent: 'space-between'
     }}>
       {/* Search */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         background: 'var(--bg-card)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-sm)', padding: '8px 14px',
-        width: 280, transition: 'border-color var(--transition)'
-      }}
-        onFocus={e => e.currentTarget.style.borderColor = 'var(--border-accent)'}
-        onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
-      >
+        borderRadius: 'var(--radius-sm)', padding: '8px 14px', width: 280,
+      }}>
         <svg width="16" height="16" fill="none" stroke="var(--text-muted)" strokeWidth="2" viewBox="0 0 24 24">
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
         </svg>
-        <input
-          placeholder="Search jobs, skills, courses…"
-          style={{
-            background: 'none', color: 'var(--text-primary)',
-            fontSize: 14, width: '100%'
-          }}
-        />
+        <input placeholder="Search jobs, skills, courses…"
+          style={{ background: 'none', color: 'var(--text-primary)', fontSize: 14, width: '100%' }} />
       </div>
- 
+
       {/* Right side */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        {/* Notification bell */}
+        {/* Bell */}
         <button style={{
-          position: 'relative', width: 38, height: 38,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'var(--bg-card)', border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)',
-          transition: 'all var(--transition)'
-        }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor='var(--border-accent)'; e.currentTarget.style.color='var(--accent)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-secondary)' }}
-        >
+          borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)'
+        }}>
           <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
           </svg>
-          {notifs > 0 && (
-            <span style={{
-              position: 'absolute', top: 6, right: 6,
-              width: 8, height: 8, background: 'var(--accent)',
-              borderRadius: '50%', border: '1.5px solid var(--bg-primary)'
-            }} />
-          )}
         </button>
- 
-        {/* Avatar */}
-        <div style={{
-          width: 36, height: 36, borderRadius: '50%',
+
+        {/* Name */}
+        {user?.name && (
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+            {user.name.split(' ')[0]}
+          </span>
+        )}
+
+        {/* Avatar / logout */}
+        <div onClick={handleLogout} title="Logout" style={{
+          width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
           background: 'linear-gradient(135deg, var(--blue), var(--purple))',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14,
-          color: '#fff', cursor: 'pointer', border: '2px solid var(--border)'
+          color: '#fff', border: '2px solid var(--border)'
         }}>
-          JD
+          {initials}
         </div>
       </div>
     </nav>
