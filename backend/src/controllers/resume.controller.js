@@ -44,7 +44,6 @@ export const getAllResumes = async (req, res, next) => {
     const resumes = await Resume.find({ user: req.user._id })
       .sort({ createdAt: -1 })
       .select('-parsed.rawText -skillGapCache -roadmapCache -interviewCache -projectsCache')
-
     res.json({ resumes })
   } catch (err) {
     next(err)
@@ -59,11 +58,9 @@ export const deleteResume = async (req, res, next) => {
     const resume = await Resume.findOne({ _id: req.params.id, user: req.user._id })
     if (!resume) return res.status(404).json({ message: 'Resume not found.' })
 
-    // Delete from Cloudinary
     await cloudinary.uploader.destroy(resume.cloudinaryId, { resource_type: 'raw' })
     await resume.deleteOne()
 
-    // Clear activeResumeId if this was it
     if (req.user.activeResumeId?.toString() === resume._id.toString()) {
       await User.findByIdAndUpdate(req.user._id, { activeResumeId: null })
     }
@@ -82,11 +79,9 @@ export const setActiveResume = async (req, res, next) => {
     const resume = await Resume.findOne({ _id: req.params.id, user: req.user._id })
     if (!resume) return res.status(404).json({ message: 'Resume not found.' })
 
-    // Un-flag all, then flag this one
     await Resume.updateMany({ user: req.user._id }, { isActive: false })
     resume.isActive = true
     await resume.save()
-
     await User.findByIdAndUpdate(req.user._id, { activeResumeId: resume._id })
 
     res.json({ message: 'Active resume updated.', resume })
@@ -104,24 +99,41 @@ export const parseResume = async (req, res, next) => {
       .select('+parsed.rawText')
     if (!resume) return res.status(404).json({ message: 'Resume not found.' })
 
-    // Return cached if already parsed
+    // Return cached result if already parsed
     if (resume.parsed?.parsedAt && resume.parsed.skills?.length > 0) {
-      return res.json(resume.parsed)
+      const cached = resume.parsed.toObject ? resume.parsed.toObject() : { ...resume.parsed }
+      delete cached.rawText
+      return res.json(cached)
     }
 
-    // Extract text
-    const rawText = await extractTextFromUrl(resume.cloudinaryUrl)
-    if (!rawText) {
-      return res.status(422).json({ message: 'Could not extract text from this file. Try a PDF with selectable text.' })
+    // ── Extract text — pass cloudinaryId for signed URL ──
+    const rawText = await extractTextFromUrl(resume.cloudinaryUrl, resume.cloudinaryId)
+
+    if (!rawText || rawText.length < 50) {
+      return res.status(422).json({
+        message: 'Could not extract text from this file. Make sure it is a PDF with selectable text (not a scanned image).',
+      })
     }
 
-    // AI parse
+    // ── AI parse ──
     const parsed = await parseResumeWithAI(rawText)
 
-    resume.parsed = { ...parsed, rawText, parsedAt: new Date() }
+    // Merge and save
+    resume.parsed = {
+      skills:     parsed.skills     || [],
+      experience: parsed.experience || [],
+      education:  parsed.education  || [],
+      summary:    parsed.summary    || '',
+      rawText,
+      parsedAt: new Date(),
+    }
     await resume.save()
 
-    const { rawText: _, ...safeData } = resume.parsed.toObject ? resume.parsed.toObject() : resume.parsed
+    // Return without rawText
+    const { rawText: _raw, ...safeData } = resume.parsed.toObject
+      ? resume.parsed.toObject()
+      : { ...resume.parsed }
+
     res.json(safeData)
   } catch (err) {
     next(err)
@@ -139,9 +151,8 @@ export const analyseSkillGap = async (req, res, next) => {
     const resume = await Resume.findOne({ _id: req.params.id, user: req.user._id })
     if (!resume) return res.status(404).json({ message: 'Resume not found.' })
 
-    // Ensure parsed
     if (!resume.parsed?.parsedAt) {
-      return res.status(400).json({ message: 'Parse the resume first via GET /resume/:id/parse' })
+      return res.status(400).json({ message: 'Parse the resume first via GET /api/resume/:id/parse' })
     }
 
     const cacheKey = targetRole.toLowerCase().replace(/\s+/g, '_')
@@ -152,7 +163,6 @@ export const analyseSkillGap = async (req, res, next) => {
     const result = await analyseSkillGapWithAI(resume.parsed, targetRole)
     resume.skillGapCache.set(cacheKey, result)
     await resume.save()
-
     res.json(result)
   } catch (err) {
     next(err)
@@ -179,13 +189,10 @@ export const getRoadmap = async (req, res, next) => {
       return res.json(resume.roadmapCache.get(cacheKey))
     }
 
-    const gapKey     = cacheKey
-    const skillGap   = resume.skillGapCache?.get(gapKey) || null
-    const result     = await generateRoadmapWithAI(resume.parsed, targetRole, skillGap)
-
+    const skillGap = resume.skillGapCache?.get(cacheKey) || null
+    const result   = await generateRoadmapWithAI(resume.parsed, targetRole, skillGap)
     resume.roadmapCache.set(cacheKey, result)
     await resume.save()
-
     res.json(result)
   } catch (err) {
     next(err)
@@ -215,7 +222,6 @@ export const getInterviewQuestions = async (req, res, next) => {
     const result = await generateInterviewQuestionsWithAI(resume.parsed, role, type)
     resume.interviewCache.set(cacheKey, result)
     await resume.save()
-
     res.json(result)
   } catch (err) {
     next(err)
@@ -244,10 +250,8 @@ export const getProjectSuggestions = async (req, res, next) => {
 
     const skillGap = resume.skillGapCache?.get(cacheKey) || null
     const result   = await generateProjectSuggestionsWithAI(resume.parsed, targetRole, skillGap)
-
     resume.projectsCache.set(cacheKey, result)
     await resume.save()
-
     res.json(result)
   } catch (err) {
     next(err)
