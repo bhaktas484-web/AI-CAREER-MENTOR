@@ -6,7 +6,7 @@ import morgan from 'morgan'
 import rateLimit from 'express-rate-limit'
 
 import connectDB from './config/db.js'
-import authRoutes from './routes/auth.routes.js'
+import authRoutes   from './routes/auth.routes.js'
 import resumeRoutes from './routes/resume.routes.js'
 import { errorHandler, notFound } from './middleware/error.middleware.js'
 
@@ -18,14 +18,14 @@ connectDB()
 // ── Security & utils ──────────────────────────────────────────
 app.use(helmet())
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: process.env.CLIENT_URL || 'http://localhost:3000',
   credentials: true,
 }))
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))
 
-// ── Global rate limiter ───────────────────────────────────────
+// ── Rate limiter ──────────────────────────────────────────────
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -41,5 +41,10 @@ app.use('/api/resume', resumeRoutes)
 app.use(notFound)
 app.use(errorHandler)
 
-const PORT = process.env.PORT || 5000
-app.listen(PORT, () => console.log(`🚀  Server running on port ${PORT}`))
+// ── Start server only when running directly (not on Vercel) ───
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 5000
+  app.listen(PORT, () => console.log(`🚀  Server running on port ${PORT}`))
+}
+
+export default app
